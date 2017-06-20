@@ -383,7 +383,7 @@ class Commander {
         if (endIndex === -1 )
           this.error(`Key '${prefix + key}' is invalid`);
 
-        const indexValue = key.substring(index, endIndex);
+        const indexValue = key.substring(index + 1, endIndex);
         if (!/^\d+$/.test(indexValue))
           this.error(`Key '${prefix + key}' is invalid`);
 
@@ -396,7 +396,9 @@ class Commander {
 
         const subKey = key.substring(endIndex + 1);
         if (subKey) {
-          return this.setProperty(thisObj, prefix + thisKey + `[${i}]`, subKey, value);
+          if (!subKey.startsWith("."))
+            this.error(`Key '${prefix + thisKey}' is invalid`);
+          return this.setProperty(thisObj[i], prefix + thisKey + `[${i}]`, subKey.substring(1), value);
         }
         else {
           // TODO:

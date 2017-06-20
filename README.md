@@ -140,8 +140,8 @@ Firstly, we should learn how to read the drivers ROM based on the Linux document
 ```bash
 # To read ROM you first need to write `1` to it, then read it, and then write
 # `0` to it as described in the documentation. The reason is that the content
-# is not provided by default, by writing `1` to it you are telling driver to
-# make it accessible.
+# is not provided by default, by writing `1` to it you are telling the driver
+# to make it accessible.
 CARD_ID = 1
 CARD_ROM = "/sys/class/drm/card${CARD_ID}/device/rom"
 
