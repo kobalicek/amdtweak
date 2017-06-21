@@ -2,7 +2,7 @@
 
 const fs = require("fs");
 const atom = require("./lib/atom.js");
-const sysfs = require("./lib/sysfs.js");
+const iofs = require("./lib/iofs.js");
 
 const hasOwn = Object.prototype.hasOwnProperty;
 const AMDGPU_DRIVER_NAME = "amdgpu";
@@ -20,9 +20,9 @@ class Utils {
     var buf = null;
     const romPath = `${Utils.pathOfCard(id)}/device/rom`;
 
-    if (sysfs.writeString(romPath, "1")) {
-      buf = sysfs.readFile(romPath);
-      sysfs.writeString(romPath, "0");
+    if (iofs.writeString(romPath, "1")) {
+      buf = iofs.readFile(romPath);
+      iofs.writeString(romPath, "0");
     }
 
     return buf;
@@ -126,7 +126,7 @@ class Commander {
       return this.warning(`Card '${id}' already selected, skipping...`);
 
     // Check if this card exists and it's using AMDGPU driver.
-    const props = sysfs.readProperties(Utils.pathOfCard(id) + "/device/uevent");
+    const props = iofs.readProperties(Utils.pathOfCard(id) + "/device/uevent");
     if (!props || props.DRIVER !== AMDGPU_DRIVER_NAME)
       return this.warning(`Card ${id} doesn't exist or it doesn't use AMDGPU driver`);
 
@@ -165,7 +165,7 @@ class Commander {
       var id = 0;
       for (;;) {
         if (this.cards.indexOf(id) === -1) {
-          const props = sysfs.readProperties(Utils.pathOfCard(id) + "/device/uevent");
+          const props = iofs.readProperties(Utils.pathOfCard(id) + "/device/uevent");
           if (!props)
             break;
 
@@ -220,7 +220,7 @@ class Commander {
       const id = cards[i];
       const fileName = `${Utils.pathOfCard(id)}/device/pp_table`;
 
-      const buf = sysfs.readFile(fileName);
+      const buf = iofs.readFile(fileName);
       if (!buf) {
         this.error(`Couldn't read PowerPlay table of card '${id}`);
       }
@@ -255,7 +255,7 @@ class Commander {
       }
 
       atom.$mergeData(buf, 0, null, pp);
-      if (sysfs.writeFile(fileName, buf)) {
+      if (iofs.writeFile(fileName, buf)) {
         this.verbose(`Card '${id}' PP data written to '${fileName}'`);
       }
       else {
@@ -277,7 +277,7 @@ class Commander {
       const id = cards[i];
       const fileName = fileNameTemplate.replace("@", String(id));
 
-      const buf = sysfs.readFile(fileName);
+      const buf = iofs.readFile(fileName);
       if (!buf) {
         this.error(`Couldn't read '${fileName}' file '${id}`);
       }
@@ -312,7 +312,7 @@ class Commander {
       }
 
       atom.$mergeData(buf, 0, null, pp);
-      if (sysfs.writeFile(fileName, buf)) {
+      if (iofs.writeFile(fileName, buf)) {
         this.verbose(`Card '${id}' PP data written to '${fileName}'`);
       }
       else {
@@ -472,7 +472,7 @@ class Commander {
         this.warning(`Couldn't extract BIOS of card '${id}, are you root?`);
       }
       else {
-        if (!sysfs.writeFileSync(fileName, buf))
+        if (!iofs.writeFileSync(fileName, buf))
           this.warning(`Couldn't write to '${fileName}'`);
       }
     }
@@ -504,7 +504,7 @@ class Commander {
           this.warning(`Couldn't extract PowerPlay from BIOS of card '${id}', please report this!`);
         }
         else {
-          if (!sysfs.writeFile(fileName, pp))
+          if (!iofs.writeFile(fileName, pp))
             this.warning(`Couldn't write to '${fileName}'`);
         }
       }

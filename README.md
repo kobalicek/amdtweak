@@ -30,7 +30,7 @@ Library Design
   * `/lib` - Library
     * `/lib/atom.js` - Library that provides structures used by ATOM BIOS and PowerPlay (PP).
     * `/lib/binlib.js` - Library that can be used to describe C-like structures and that can serialize and deserialize them to/from JSON, respectively.
-    * `/lib/sysfs.js` - Lightweight library that simplifies accessing sysfs and regular filesystem.
+    * `/lib/iofs.js` - Lightweight library that simplifies accessing files with helpers for making sysfs access easier.
 
 SysFS - Basics
 --------------

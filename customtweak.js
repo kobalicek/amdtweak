@@ -3,7 +3,7 @@
 
 const fs = require("fs");
 const atom = require("./lib/atom.js");
-const sysfs = require("./lib/sysfs.js");
+const iofs = require("./lib/iofs.js");
 
 // Change to true if you want to overwrite your PP table(s).
 //   (you must execute this script as root in that case)
@@ -28,7 +28,7 @@ function getListOfAMDGPUs() {
   var cardId = 0;
 
   for (;;) {
-    const props = sysfs.readProperties(pathOfCard(cardId) + "/device/uevent");
+    const props = iofs.readProperties(pathOfCard(cardId) + "/device/uevent");
     if (!props) break;
 
     if (props.DRIVER === AMDGPU_DRIVER_NAME)
