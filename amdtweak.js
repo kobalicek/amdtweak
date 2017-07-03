@@ -472,7 +472,7 @@ class Commander {
         this.warning(`Couldn't extract BIOS of card '${id}, are you root?`);
       }
       else {
-        if (!iofs.writeFileSync(fileName, buf))
+        if (!iofs.writeFile(fileName, buf))
           this.warning(`Couldn't write to '${fileName}'`);
       }
     }
