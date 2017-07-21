@@ -1,10 +1,11 @@
 "use strict";
 
 const fs = require("fs");
-const atom = require("./lib/atom.js");
 const iofs = require("./lib/iofs.js");
+const vbios = require("./lib/vbios.js");
 
 const hasOwn = Object.prototype.hasOwnProperty;
+
 const AMDGPU_DRIVER_NAME = "amdgpu";
 
 // ============================================================================
@@ -16,7 +17,7 @@ class Utils {
     return `/sys/class/drm/card${id}`;
   }
 
-  static extractBIOS(id) {
+  static readBIOS(id) {
     var buf = null;
     const romPath = `${Utils.pathOfCard(id)}/device/rom`;
 
@@ -40,7 +41,7 @@ class Commander {
     this.verboseMessages = false;
 
     this.cards = [];  // IDs of all cards selected.
-    this.data  = [];  // Data related to each card in `cards` array.
+    this.data = [];   // Data related to each card in `cards` array.
   }
 
   // --------------------------------------------------------------------------
@@ -209,6 +210,33 @@ class Commander {
   // [Read / Write PowerPlay]
   // --------------------------------------------------------------------------
 
+  __read_bios_pp(args) {
+    if (args.length !== 0)
+      this.error(`'--read-bios-pp' command accepts no arguments`);
+
+    const data = this.data;
+    const cards = this.cards;
+
+    for (var i = 0; i < cards.length; i++) {
+      const id = cards[i];
+      const biosBuf = Utils.readBIOS(id);
+
+      if (!biosBuf) {
+        this.error(`Couldn't read VBIOS of card '${id}' (are you root?)`);
+      }
+
+      const ppBuf = vbios.extractPowerPlayFromVBIOS(biosBuf, 0);
+      if (!ppBuf) {
+        this.error(`Couldn't extract PowerPlay from VBIOS of card '${id}', please report this!`);
+      }
+
+      const ppObj = vbios.$readObject({ buffer: ppBuf, type: vbios.PowerPlayTable });
+      data[i].pp = ppObj;
+      data[i].buf = ppBuf;
+      this.verbose(`Card '${id}' PP data loaded from card's VBIOS`);
+    }
+  }
+
   __read_card_pp(args) {
     if (args.length !== 0)
       this.error(`'--read-card-pp' command accepts no arguments`);
@@ -220,16 +248,14 @@ class Commander {
       const id = cards[i];
       const fileName = `${Utils.pathOfCard(id)}/device/pp_table`;
 
-      const buf = iofs.readFile(fileName);
-      if (!buf) {
+      const ppBuf = iofs.readFile(fileName);
+      if (!ppBuf) {
         this.error(`Couldn't read PowerPlay table of card '${id}`);
       }
       else {
-        const pp = atom.$decomposeData(buf, 0, atom.PowerPlayInfo);
-
-        data[i].pp = pp;
-        data[i].buf = buf;
-
+        const ppObj = vbios.$readObject({ buffer: ppBuf, type: vbios.PowerPlayTable });
+        data[i].pp = ppObj;
+        data[i].buf = ppBuf;
         this.verbose(`Card '${id}' PP data loaded from '${fileName}'`);
       }
     }
@@ -246,16 +272,16 @@ class Commander {
       const id = cards[i];
       const fileName = `${Utils.pathOfCard(id)}/device/pp_table`;
 
-      const pp = data[i].pp;
-      const buf = data[i].buf;
+      const ppObj = data[i].pp;
+      const ppBuf = data[i].buf;
 
-      if (!buf || !pp) {
+      if (!ppBuf || !ppObj) {
         this.warning(`PP table of card '${id}' not loaded, cannot write it`);
         continue;
       }
 
-      atom.$mergeData(buf, 0, null, pp);
-      if (iofs.writeFile(fileName, buf)) {
+      vbios.$updateObject({ buffer: ppBuf, object: ppObj });
+      if (iofs.writeFile(fileName, ppBuf)) {
         this.verbose(`Card '${id}' PP data written to '${fileName}'`);
       }
       else {
@@ -277,15 +303,15 @@ class Commander {
       const id = cards[i];
       const fileName = fileNameTemplate.replace("@", String(id));
 
-      const buf = iofs.readFile(fileName);
-      if (!buf) {
+      const ppBuf = iofs.readFile(fileName);
+      if (!ppBuf) {
         this.error(`Couldn't read '${fileName}' file '${id}`);
       }
       else {
-        const pp = atom.$decomposeData(buf, 0, atom.PowerPlayInfo);
+        constppObjpp = vbios.$readObject({ buffer: ppBuf, type: vbios.PowerPlayTable });
 
-        data[i].pp = pp;
-        data[i].buf = buf;
+        data[i].pp = ppObj;
+        data[i].buf = ppBuf;
 
         this.verbose(`Card '${id}' PP data loaded from '${fileName}'`);
       }
@@ -303,16 +329,16 @@ class Commander {
       const id = cards[i];
       const fileName = `${Utils.pathOfCard(id)}/device/pp_table`;
 
-      const pp = data[i].pp;
-      const buf = data[i].buf;
+      const ppObj = data[i].pp;
+      const ppBuf = data[i].buf;
 
-      if (!buf || !pp) {
+      if (!ppBuf || !ppObj) {
         this.warning(`PP table of card '${id}' not loaded, cannot write it`);
         continue;
       }
 
-      atom.$mergeData(buf, 0, null, pp);
-      if (iofs.writeFile(fileName, buf)) {
+      vbios.$updateObject({ buffer: ppBuf, object: ppObj });
+      if (iofs.writeFile(fileName, ppBuf)) {
         this.verbose(`Card '${id}' PP data written to '${fileName}'`);
       }
       else {
@@ -467,7 +493,7 @@ class Commander {
       const id = cards[i];
       const fileName = fileNameTemplate.replace("@", String(id));
 
-      const buf = Utils.extractBIOS(id);
+      const buf = Utils.readBIOS(id);
       if (!buf) {
         this.warning(`Couldn't extract BIOS of card '${id}, are you root?`);
       }
@@ -494,12 +520,12 @@ class Commander {
       const id = cards[i];
       const fileName = fileNameTemplate.replace("@", String(id));
 
-      const buf = Utils.extractBIOS(id);
+      const buf = Utils.readBIOS(id);
       if (!buf) {
         this.warning(`Couldn't extract BIOS of card '${id}', are you root?`);
       }
       else {
-        const pp = atom.extractVBIOSPowerPlayData(buf, 0);
+        const pp = vbios.extractPowerPlayFromVBIOS(buf, 0);
         if (!pp) {
           this.warning(`Couldn't extract PowerPlay from BIOS of card '${id}', please report this!`);
         }
@@ -528,14 +554,15 @@ function printUsage() {
   console.log("         X-Y             - Select all available cards between X and Y, inclusive");
   console.log("         X,Y,...         - Select X, Y, possibly more cards");
   console.log("");
+  console.log("  --read-bios-pp         - Read a PowerPlay table from each selected card's BIOS (root)");
   console.log("  --read-card-pp         - Read a PowerPlay table from each selected card");
   console.log("  --write-card-pp        - Write a PowerPlay table to each selected card");
   console.log("");
   console.log("  --read-file-pp FILE    - Read a PowerPlay table from file");
   console.log("  --write-file-pp FILE   - Write a PowerPlay table to file");
   console.log("");
-  console.log("  --extract-bios FILE    - Extract BIOS of each selected card and store to FILE");
-  console.log("  --extract-bios-pp FILE - Extract PP from BIOS of each selected card and store to FILE");
+  console.log("  --extract-bios FILE    - Extract BIOS of each selected card and store to FILE (root)");
+  console.log("  --extract-bios-pp FILE - Extract PP from BIOS of each selected card and store to FILE (root)");
   console.log("");
   console.log("  --set PROPERTY=VALUE   - Set a PROPERTY of each loaded PowerPlay table to VALUE");
   console.log("  --print                - Print each PowerPlay table as JSON");

@@ -10,7 +10,9 @@ The library part of this tool is written in JS and is cross-platform. You can us
 Disclaimer
 ----------
 
-**Use at your own risk! Improper use of this tool can damage your hardware and put your house on fire!**
+**Use at your own risk! Improper use of this tool can damage your hardware!**
+
+**I Don't have AMDGPUs anymore so this tool is currently untested. If you encounter a bug please report it and if possible try to fix it, the whole tool can be debugged easily.**
 
 Install & Use
 -------------
@@ -28,9 +30,9 @@ Library Design
 
   * `/`    - Root directory, provides documentation and few examples
   * `/lib` - Library
-    * `/lib/atom.js` - Library that provides structures used by ATOM BIOS and PowerPlay (PP).
     * `/lib/binlib.js` - Library that can be used to describe C-like structures and that can serialize and deserialize them to/from JSON, respectively.
     * `/lib/iofs.js` - Lightweight library that simplifies accessing files with helpers for making sysfs access easier.
+    * `/lib/vbios.js` - Library that provides structures used by ATOM BIOS and PowerPlay (PP). Renamed to vbios.js so it can support Intel and NVidia BIOSes in the future.
 
 SysFS - Basics
 --------------
@@ -90,7 +92,7 @@ We know where the PowerPlay table is stored so let's manipulate it. You only nee
 
 ```js
 const fs = require("fs");
-const atom = require("./lib/atom.js");
+const vbios = require("./lib/vbios.js");
 
 // Just what the script should do.
 const DUMP = true;
@@ -101,9 +103,8 @@ const CARD_PP = `/sys/class/drm/card${CARD_ID}/device/pp_table`;
 
 const buf = fs.readFileSync(CARD_PP);
 
-// Decompose `buf` into a JS object, the prototype of the function is:
-//   $decomposeData(buffer, offset, table or table header)
-const obj = atom.$decomposeData(buf, 0, atom.PowerPlayInfo);
+// Decompose `buf` into a JS object:
+const obj = vbios.$readObject({ buffer: buf, type: vbios.PowerPlayTable });
 
 // Now, if everything went ok we will have an object describing the
 // whole PP table. You can do whatever you want with it, including
@@ -118,9 +119,8 @@ obj.PowerTuneTable.TDP = 90;
 
 // We modified the JS object and the data was not been synced with
 // the original buffer yet. To save all values back to the buffer
-// you have to call $mergeData, the prototype is:
-//   $mergeData(buffer, offset, table or null to read from the object, object)
-atom.$mergeData(buf, 0, null, obj);
+// you have to call `$updateObject()`:
+vbios.$updateObject({ buffer: buf, object: obj });
 
 // Now the `buf` contains new changed data, the only thing to do
 // next is to write it back.
@@ -154,7 +154,7 @@ The script was written in bash, but can be rewritten to any other language easil
 
 ```js
 const fs = require("fs");
-const atom = require("./lib/atom.js");
+const vbios = require("./lib/vbios.js");
 
 const CARD_ID = 1;
 const CARD_PP = `/sys/class/drm/card${CARD_ID}/device/pp_table`;
@@ -169,7 +169,7 @@ const biosData = fs.readFileSync(CARD_BIOS);
 // Tell the driver we don't need to read its ROM anymore.
 fs.writeFileSync(CARD_BIOS, "0");
 
-const biosPPData = atom.extractVBIOSPowerPlayData(biosData);
+const biosPPData = vbios.extractPowerPlayFromVBIOS(biosData);
 if (biosPPData.equals(rawPPData))
   console.log(`The card ${CARD_ID} is using stock PowerPlay table.`);
 else
@@ -242,7 +242,7 @@ $ ./amdtweak --verbose \
 
 The tool is still in development, to show a basic usage just execute it without any arguments:
 
-```bash
+```
 $ ./amdtweak
 
 Usage:
@@ -254,6 +254,7 @@ Commands:
          X-Y             - Select all available cards between X and Y, inclusive
          X,Y,...         - Select X, Y, possibly more cards
 
+  --read-bios-pp         - Read a PowerPlay table from each selected card's BIOS
   --read-card-pp         - Read a PowerPlay table from each selected card
   --write-card-pp        - Write a PowerPlay table to each selected card
 

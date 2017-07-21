@@ -1,13 +1,15 @@
 // This is an example that you can modify to test `amdtweak` package.
 "use strict";
 
-const fs = require("fs");
-const atom = require("./lib/atom.js");
 const iofs = require("./lib/iofs.js");
+const vbios = require("./lib/vbios.js");
 
 // Change to true if you want to overwrite your PP table(s).
 //   (you must execute this script as root in that case)
 const OVERWRITE = false;
+
+// Name of AMDGPU driver (either AMDGPU or AMDGPU-PRO).
+const AMDGPU_DRIVER_NAME = "amdgpu";
 
 // ============================================================================
 // Called for each PP table of each AMDGPU found in your running system.
@@ -22,8 +24,6 @@ function pathOfCard(cardId) {
 }
 
 function getListOfAMDGPUs() {
-  const AMDGPU_DRIVER_NAME = "amdgpu";
-
   var cards = [];
   var cardId = 0;
 
@@ -43,14 +43,14 @@ function main() {
   getListOfAMDGPUs().forEach(function(cardId) {
     const ppFileName = pathOfCard(cardId) + "/device/pp_table";
     try {
-      const buf = fs.readFileSync(ppFileName);
-      const pp = atom.$decomposeData(buf, 0, atom.PowerPlayInfo);
+      const buf = iofs.readFile(ppFileName);
+      const pp = vbios.$readObject({ buffer: buf, type: vbios.PowerPlayTable });
 
       modifyPPTable(cardId, pp);
-      atom.$mergeData(buf, 0, null, pp);
+      vbios.$updateObject({ buffer: buf, object: pp });
 
       if (OVERWRITE)
-        fs.writeFileSync(ppFileName, buf);
+        iofs.writeFile(ppFileName, buf);
     }
     catch (ex) {
       console.log(ex.toString());
