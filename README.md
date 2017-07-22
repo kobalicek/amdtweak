@@ -5,7 +5,9 @@ This is a library that can be used to manipulate data used by AMDGPU's ATOM BIOS
 
 The project started by supporting Polaris GPUs, but since the structure definitions have support for versioning any GPU can be supported if the required tables are provided.
 
-The library part of this tool is written in JS and is cross-platform. You can use it on any OS and also within a browser (yeah, you can use it to create an online ATOM BIOS editor, for example). However, scripts provided at the root of the project are designed only for Linux and for AMD GPUs (they use sysfs to access the VROM and PP tables and also to update PP tables, but it's not possible to update VROM from a running Linux as far as I know).
+The library part of this tool is written in JS and is cross-platform. You can use it on any OS and also within a browser. However, scripts provided at the root of the project are designed only for Linux and for AMD GPUs (they use sysfs to access the VROM and PP tables).
+
+There is a [vbiosed](https://kobalicek.com/vbiosed) project that brings VBIOS editing into a browser, however, it can only explore existing VBIOS and PowerPlay tables at the moment.
 
 Disclaimer
 ----------
