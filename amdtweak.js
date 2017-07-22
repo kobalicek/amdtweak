@@ -1,6 +1,8 @@
 "use strict";
 
 const fs = require("fs");
+
+const binlib = require("./lib/binlib.js");
 const iofs = require("./lib/iofs.js");
 const vbios = require("./lib/vbios.js");
 
@@ -374,85 +376,7 @@ class Commander {
       if (!pp)
         this.error(`'--set' command requires PP table(s) to be loaded (card '${id}')`);
 
-      this.setProperty(pp, "", key, value);
-    }
-  }
-
-  setProperty(obj, path, key, value) {
-    if (!key)
-      this.error(`Key '${path}' is invalid`);
-
-    const prefix = path ? path + "." : "";
-    const m = key.match(/[\.\[]/);
-
-    if (m) {
-      // Object or array access.
-      const what = m[0];
-      const index = m.index;
-
-      const thisKey = key.substring(0, index);
-      if (!hasOwn.call(obj, thisKey))
-        throw Error(`Key '${prefix + thisKey}' doesn't exist`);
-
-      const thisObj = obj[thisKey];
-      if (what === ".") {
-        // Object access.
-        if (thisObj == null || typeof thisObj !== "object" || Array.isArray(thisObj))
-          this.error(`Key '${prefix + thisKey}' doesn't point to an Object`);
-
-        const subKey = key.substring(index + 1);
-        return this.setProperty(thisObj, prefix + thisKey, subKey, value);
-      }
-      else {
-        // Array access.
-        const endIndex = key.indexOf("]", index);
-        if (endIndex === -1 )
-          this.error(`Key '${prefix + key}' is invalid`);
-
-        const indexValue = key.substring(index + 1, endIndex);
-        if (!/^\d+$/.test(indexValue))
-          this.error(`Key '${prefix + key}' is invalid`);
-
-        if (!Array.isArray(thisObj))
-          this.error(`Key '${prefix + thisKey}' doesn't point to an Array`);
-
-        const i = parseInt(indexValue);
-        if (i >= thisObj.length)
-          this.error(`Key '${prefix + thisKey}' index '${i}' out of range [0, ${thisObj.length})`);
-
-        const subKey = key.substring(endIndex + 1);
-        if (subKey) {
-          if (!subKey.startsWith("."))
-            this.error(`Key '${prefix + thisKey}' is invalid`);
-          return this.setProperty(thisObj[i], prefix + thisKey + `[${i}]`, subKey.substring(1), value);
-        }
-        else {
-          // TODO:
-        }
-      }
-    }
-    else {
-      if (!hasOwn.call(obj, key))
-        this.error(`Key '${prefix + key}' doesn't exist`);
-
-      const prev = obj[key];
-      if (prev == null || typeof prev === "object")
-        this.error(`Key '${prefix + key}' is an object, it cannot be set to '${value}'`);
-
-      if (typeof prev === "number") {
-        if (!/^-?\d+$/.test(value))
-          this.error(`Key '${prefix + key}' points to a number, value '${value}' is invalid`);
-
-        obj[key] = parseInt(value);
-        return;
-      }
-
-      if (typeof prev === "string") {
-        obj[key] = value;
-        return;
-      }
-
-      this.error(`Key '${prefix + key}' exists, but couldn't find a right setter`);
+      binlib.utils.setKey(pp, key, value);
     }
   }
 
