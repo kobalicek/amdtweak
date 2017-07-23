@@ -23,6 +23,10 @@ function pathOfCard(cardId) {
   return `/sys/class/drm/card${cardId}`;
 }
 
+function log(message) {
+  console.log(message);
+}
+
 function getListOfAMDGPUs() {
   var cards = [];
   var cardId = 0;
@@ -44,10 +48,10 @@ function main() {
     const ppFileName = pathOfCard(cardId) + "/device/pp_table";
     try {
       const buf = iofs.readFile(ppFileName);
-      const pp = vbios.$readObject({ buffer: buf, type: vbios.PowerPlayTable });
+      const pp = vbios.$readObject({ buffer: buf, type: vbios.PowerPlayTable, log: log });
 
       modifyPPTable(cardId, pp);
-      vbios.$updateObject({ buffer: buf, object: pp });
+      vbios.$updateObject({ buffer: buf, object: pp, log: log });
 
       if (OVERWRITE)
         iofs.writeFile(ppFileName, buf);

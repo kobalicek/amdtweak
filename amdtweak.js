@@ -232,7 +232,7 @@ class Commander {
         this.error(`Couldn't extract PowerPlay from VBIOS of card '${id}', please report this!`);
       }
 
-      const ppObj = vbios.$readObject({ buffer: ppBuf, type: vbios.PowerPlayTable });
+      const ppObj = vbios.$readObject({ buffer: ppBuf, type: vbios.PowerPlayTable, log: this.warning.bind(this) });
       data[i].pp = ppObj;
       data[i].buf = ppBuf;
       this.verbose(`Card '${id}' PP data loaded from card's VBIOS`);
@@ -255,7 +255,7 @@ class Commander {
         this.error(`Couldn't read PowerPlay table of card '${id}`);
       }
       else {
-        const ppObj = vbios.$readObject({ buffer: ppBuf, type: vbios.PowerPlayTable });
+        const ppObj = vbios.$readObject({ buffer: ppBuf, type: vbios.PowerPlayTable, log: this.warning.bind(this) });
         data[i].pp = ppObj;
         data[i].buf = ppBuf;
         this.verbose(`Card '${id}' PP data loaded from '${fileName}'`);
@@ -282,7 +282,7 @@ class Commander {
         continue;
       }
 
-      vbios.$updateObject({ buffer: ppBuf, object: ppObj });
+      vbios.$updateObject({ buffer: ppBuf, object: ppObj, log: this.warning.bind(this) });
       if (iofs.writeFile(fileName, ppBuf)) {
         this.verbose(`Card '${id}' PP data written to '${fileName}'`);
       }
@@ -310,11 +310,9 @@ class Commander {
         this.error(`Couldn't read '${fileName}' file '${id}`);
       }
       else {
-        constppObjpp = vbios.$readObject({ buffer: ppBuf, type: vbios.PowerPlayTable });
-
+        const ppObj = vbios.$readObject({ buffer: ppBuf, type: vbios.PowerPlayTable, log: this.warning.bind(this) });
         data[i].pp = ppObj;
         data[i].buf = ppBuf;
-
         this.verbose(`Card '${id}' PP data loaded from '${fileName}'`);
       }
     }
@@ -339,7 +337,7 @@ class Commander {
         continue;
       }
 
-      vbios.$updateObject({ buffer: ppBuf, object: ppObj });
+      vbios.$updateObject({ buffer: ppBuf, object: ppObj, log: this.warning.bind(this) });
       if (iofs.writeFile(fileName, ppBuf)) {
         this.verbose(`Card '${id}' PP data written to '${fileName}'`);
       }
@@ -394,7 +392,6 @@ class Commander {
     for (var i = 0; i < cards.length; i++) {
       const id = cards[i];
       const pp = data[i].pp;
-
       this.message(`Card '${id}': ` + JSON.stringify(pp, null, 2));
     }
   }
