@@ -144,12 +144,14 @@ Firstly, we should learn how to read the drivers ROM based on the Linux document
 # `0` to it as described in the documentation. The reason is that the content
 # is not provided by default, by writing `1` to it you are telling the driver
 # to make it accessible.
-CARD_ID = 1
-CARD_ROM = "/sys/class/drm/card${CARD_ID}/device/rom"
+CARD_ID=1
+CARD_ROM="/sys/class/drm/card${CARD_ID}/device/rom"
+FILE_ROM="amdgpu-rom.bin"
 
-echo 1 > CARD_ROM
-cat CARD_ROM > amdgpu-rom.bin
-echo 0 > CARD_ROM
+echo 1 > $CARD_ROM
+cat $CARD_ROM > $FILE_ROM
+echo 0 > $CARD_ROM
+echo "Saved as ${FILE_ROM}"
 ```
 
 The script was written in bash, but can be rewritten to any other language easily. Let's do this in node.js and check if the `pp_table` the card uses is the same as the `pp_table` stored in its BIOS:

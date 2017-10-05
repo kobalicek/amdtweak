@@ -1,7 +1,7 @@
 "use strict";
 
 const assert = require("assert");
-const binlib = require("./binlib.js");
+const binlib = require("../lib/binlib.js");
 
 const FLAGS = binlib.FLAGS;
 const I8 = binlib.I8;
