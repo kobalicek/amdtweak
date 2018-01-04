@@ -203,7 +203,7 @@ class Commander {
     var cards = [];
     for (var i = 0; i < args.length; i++)
       this.addCardBySelector(args[i]);
-
+    
     if (this.cards === 0)
       this.warning("No cards selected, the following operations will have no effect");
   }
@@ -283,7 +283,7 @@ class Commander {
       }
 
       vbios.$updateObject({ buffer: ppBuf, object: ppObj, log: this.warning.bind(this) });
-      if (iofs.writeFile(fileName, ppBuf)) {
+      if (iofs.writeFileBinary(fileName, ppBuf)) {
         this.verbose(`Card '${id}' PP data written to '${fileName}'`);
       }
       else {
@@ -338,12 +338,12 @@ class Commander {
         continue;
       }
 
-      vbios.$updateObject({ buffer: ppBuf, object: ppObj, log: this.warning.bind(this) });
-      if (iofs.writeFile(fileName, ppBuf)) {
+//      vbios.$updateObject({ buffer: ppBuf, object: ppObj, log: this.warning.bind(this) }); // WHY ?
+      if (iofs.writeFileBinary(fileName, ppBuf)) {
         this.verbose(`Card '${id}' PP data written to '${fileName}'`);
       }
       else {
-        this.warning(`Couldn't write PP table of card '${id}', are you root?`);
+        this.warning(`Couldn't write PP table of card '${id}' to file '${fileName}', do you have write access?`);
       }
     }
   }
@@ -420,7 +420,7 @@ class Commander {
         this.warning(`Couldn't extract BIOS of card '${id}, are you root?`);
       }
       else {
-        if (!iofs.writeFile(fileName, buf))
+        if (!iofs.writeFileBinary(fileName, buf))
           this.warning(`Couldn't write to '${fileName}'`);
       }
     }
@@ -452,7 +452,7 @@ class Commander {
           this.warning(`Couldn't extract PowerPlay from BIOS of card '${id}', please report this!`);
         }
         else {
-          if (!iofs.writeFile(fileName, pp))
+          if (!iofs.writeFileBinary(fileName, pp))
             this.warning(`Couldn't write to '${fileName}'`);
         }
       }
