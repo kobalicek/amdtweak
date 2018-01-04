@@ -319,15 +319,16 @@ class Commander {
   }
 
   __write_file_pp(args) {
-    if (args.length !== 0)
+    if (args.length !== 1)
       this.error(`'--write-file-pp' command accepts exactly one argument`);
 
     const data = this.data;
     const cards = this.cards;
+    const fileNameTemplate = this.checkFileName(args[0]);
 
     for (var i = 0; i < cards.length; i++) {
       const id = cards[i];
-      const fileName = `${Utils.pathOfCard(id)}/device/pp_table`;
+      const fileName = fileNameTemplate.replace("@", String(id));
 
       const ppObj = data[i].pp;
       const ppBuf = data[i].buf;
