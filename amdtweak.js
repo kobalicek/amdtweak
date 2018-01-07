@@ -38,12 +38,12 @@ class Utils {
 
 class Commander {
   constructor(argv) {
-    this.argv = argv; // Arguments array.
-    this.argn = 2;    // Current argument index.
-    this.verboseMessages = false;
+    this.argv = argv;        // Arguments array.
+    this.argn = 2;           // Current argument index.
+    this.verboseFlag = true; // Turn on verbosity by default.
 
-    this.cards = [];  // IDs of all cards selected.
-    this.data = [];   // Data related to each card in `cards` array.
+    this.cards = [];         // IDs of all cards selected.
+    this.data = [];          // Data related to each card in `cards` array.
   }
 
   // --------------------------------------------------------------------------
@@ -56,7 +56,7 @@ class Commander {
   }
 
   verbose(msg) {
-    if (this.verboseMessages)
+    if (this.verboseFlag)
       console.log(msg);
     return this;
   }
@@ -113,11 +113,18 @@ class Commander {
   // [Options]
   // --------------------------------------------------------------------------
 
+  __quiet(args) {
+    if (args.length)
+      this.error("--quiet parameter doesn't have any arguments");
+
+    this.verboseFlag = false;
+  }
+
   __verbose(args) {
     if (args.length)
       this.error("--verbose parameter doesn't have any arguments");
 
-    this.verboseMessages = true;
+    this.verboseFlag = true;
   }
 
   // --------------------------------------------------------------------------
@@ -126,7 +133,7 @@ class Commander {
 
   addCard(id) {
     if (this.cards.indexOf(id) !== -1)
-      return this.warning(`Card '${id}' already selected, skipping...`);
+      return this.warning(`Card ${id} already selected, skipping...`);
 
     // Check if this card exists and it's using AMDGPU driver.
     const props = iofs.readProperties(Utils.pathOfCard(id) + "/device/uevent");
@@ -136,58 +143,69 @@ class Commander {
     this.addCardInternal(id);
   }
 
-  addCardBySelector(s) {
-    // Select one card by ID.
-    if (/^\d+$/.test(s))
-      return this.addCard(parseInt(s));
+  // Adds cards to to our context by treating String `patterns` as a selector,
+  // which could contain the following patterns:
+  //
+  //   1. Single card ID.
+  //   2. Multiple card IDs separated by comma "1,2,3".
+  //   2. Multiple card IDs as a range "1-3".
+  //   3. All cards selector "@".
+  addCardBySelector(patterns) {
+    if (!patterns.trim())
+      this.error(`Invalid card selector '${patterns}'`);
 
-    // Select multiple cards separated by commas.
-    if (/^(?:\d+,)+(\d+)$/.test(s)) {
-      const array = s.split(",");
-      for (var i = 0; i < array.length; i++)
-        this.addCard(parseInt(array[i]));
-      return;
-    }
+    patterns.split(",").forEach((pattern) => {
+      const s = pattern.trim();
 
-    // Select a range of card IDs.
-    if (/^\d+-\d+$/.test(s)) {
-      const bounds = s.split("-");
-      var i = parseInt(bounds[0]);
-      var j = parseInt(bounds[1]);
+      // Select one card by ID.
+      if (/^\d+$/.test(s))
+        return this.addCard(parseInt(s));
 
-      while (i <= j) {
-        this.addCard(i);
-        i++;
-      }
+      // Select a range of card IDs.
+      if (/^\d+-\d+$/.test(s)) {
+        const bounds = s.split("-");
+        var i = parseInt(bounds[0]);
+        var j = parseInt(bounds[1]);
 
-      return;
-    }
-
-    // Select all available cards.
-    if (s === "@") {
-      var id = 0;
-      for (;;) {
-        if (this.cards.indexOf(id) === -1) {
-          const props = iofs.readProperties(Utils.pathOfCard(id) + "/device/uevent");
-          if (!props)
-            break;
-
-          if (props.DRIVER === AMDGPU_DRIVER_NAME)
-            this.addCardInternal(id);
+        while (i <= j) {
+          this.addCard(i);
+          i++;
         }
 
-        id++;
+        return;
       }
-      return;
-    }
 
-    this.error(`Invalid card selector '${s}'`);
+      // Select all available cards.
+      if (s === "@") {
+        var id = 0;
+        for (;;) {
+          if (this.cards.indexOf(id) === -1) {
+            const props = iofs.readProperties(Utils.pathOfCard(id) + "/device/uevent");
+            if (!props)
+              break;
+
+            if (props.DRIVER === AMDGPU_DRIVER_NAME)
+              this.addCardInternal(id);
+          }
+
+          id++;
+        }
+        return;
+      }
+
+      this.error(`Invalid card selector '${s}'`);
+    });
   }
 
-  addCardInternal(id) {
-    this.verbose(`Card '${id}' selected`);
-    this.cards.push(id);
-    this.data.push(Object.create(null));
+  addCardInternal(id, message) {
+    this.verbose(`Card ${id} selected${message ? " " + message : ""}`);
+
+    this.cards.push(id); // Card ID.
+    this.data.push({
+      pp: null,          // PP table (must be loaded afterwards).
+      buf: null,         // RAW data (Buffer).
+      dirty: false       // Dirty flag, each --set commands makes the cart dirty.
+    });
   }
 
   __card(args) {
@@ -203,7 +221,7 @@ class Commander {
     var cards = [];
     for (var i = 0; i < args.length; i++)
       this.addCardBySelector(args[i]);
-    
+
     if (this.cards === 0)
       this.warning("No cards selected, the following operations will have no effect");
   }
@@ -219,23 +237,32 @@ class Commander {
     const data = this.data;
     const cards = this.cards;
 
-    for (var i = 0; i < cards.length; i++) {
-      const id = cards[i];
-      const biosBuf = Utils.readBIOS(id);
+    var i;
+    function log(msg) { console.log(`Card ${cards[i]}: ${msg}`); }
 
+    for (i = 0; i < cards.length; i++) {
+      const id = cards[i];
+
+      if (id < 0) {
+        this.verbose(`Card ${id}: Ignored as it's not a system card`);
+        continue;
+      }
+
+      const biosBuf = Utils.readBIOS(id);
       if (!biosBuf) {
-        this.error(`Couldn't read VBIOS of card '${id}' (are you root?)`);
+        this.error(`Card ${id}: Couldn't read VBIOS (are you root?)`);
       }
 
       const ppBuf = vbios.extractPowerPlayFromVBIOS(biosBuf, 0);
       if (!ppBuf) {
-        this.error(`Couldn't extract PowerPlay from VBIOS of card '${id}', please report this!`);
+        this.error(`Card ${id}: Couldn't extract PowerPlay from VBIOS, please report this!`);
       }
 
-      const ppObj = vbios.$readObject({ buffer: ppBuf, type: vbios.PowerPlayTable, log: this.warning.bind(this) });
+      const ppObj = vbios.$readObject({ buffer: ppBuf, type: vbios.PowerPlayTable, log: log });
       data[i].pp = ppObj;
       data[i].buf = ppBuf;
-      this.verbose(`Card '${id}' PP data loaded from card's VBIOS`);
+      data[i].dirty = false;
+      this.verbose(`Card ${id}: PP data loaded from card's VBIOS`);
     }
   }
 
@@ -246,19 +273,29 @@ class Commander {
     const data = this.data;
     const cards = this.cards;
 
-    for (var i = 0; i < cards.length; i++) {
-      const id = cards[i];
-      const fileName = `${Utils.pathOfCard(id)}/device/pp_table`;
+    var i;
+    function log(msg) { console.log(`Card ${cards[i]}: ${msg}`); }
 
+    for (i = 0; i < cards.length; i++) {
+      const id = cards[i];
+
+      if (id < 0) {
+        this.verbose(`Card ${id}: Ignored as it's not a system card`);
+        continue;
+      }
+
+      const fileName = `${Utils.pathOfCard(id)}/device/pp_table`;
       const ppBuf = iofs.readFile(fileName);
+
       if (!ppBuf) {
-        this.error(`Couldn't read PowerPlay table of card '${id}`);
+        this.error(`Card ${id}: Couldn't read PowerPlay table`);
       }
       else {
-        const ppObj = vbios.$readObject({ buffer: ppBuf, type: vbios.PowerPlayTable, log: this.warning.bind(this) });
+        const ppObj = vbios.$readObject({ buffer: ppBuf, type: vbios.PowerPlayTable, log: log });
         data[i].pp = ppObj;
         data[i].buf = ppBuf;
-        this.verbose(`Card '${id}' PP data loaded from '${fileName}'`);
+        data[i].dirty = false;
+        this.verbose(`Card ${id}: PP data loaded from '${fileName}'`);
       }
     }
   }
@@ -270,24 +307,36 @@ class Commander {
     const data = this.data;
     const cards = this.cards;
 
-    for (var i = 0; i < cards.length; i++) {
-      const id = cards[i];
-      const fileName = `${Utils.pathOfCard(id)}/device/pp_table`;
+    var i;
+    function log(msg) { console.log(`Card ${cards[i]}: ${msg}`); }
 
+    for (i = 0; i < cards.length; i++) {
+      const id = cards[i];
+
+      if (id < 0) {
+        this.verbose(`Card ${id}: Ignored as it's not a system card`);
+        continue;
+      }
+
+      const fileName = `${Utils.pathOfCard(id)}/device/pp_table`;
       const ppObj = data[i].pp;
       const ppBuf = data[i].buf;
 
       if (!ppBuf || !ppObj) {
-        this.warning(`PP table of card '${id}' not loaded, cannot write it`);
+        this.warning(`Card ${id}: PP table not loaded so it cannot be written`);
         continue;
       }
 
-      vbios.$updateObject({ buffer: ppBuf, object: ppObj, log: this.warning.bind(this) });
+      if (data[i].dirty) {
+        vbios.$updateObject({ buffer: ppBuf, object: ppObj, log: log });
+        data[i].dirty = false;
+      }
+
       if (iofs.writeFileBinary(fileName, ppBuf)) {
-        this.verbose(`Card '${id}' PP data written to '${fileName}'`);
+        this.verbose(`Card ${id}: PP data written to '${fileName}'`);
       }
       else {
-        this.warning(`Couldn't write PP table of card '${id}', are you root?`);
+        this.warning(`Card ${id}: Couldn't write PP table, are you root?`);
       }
     }
   }
@@ -298,22 +347,28 @@ class Commander {
 
     const data = this.data;
     const cards = this.cards;
-
     const fileNameTemplate = this.checkFileName(args[0]);
 
-    for (var i = 0; i < cards.length; i++) {
+    if (!cards.length) {
+      this.addCardInternal(-1, "[implicit as --read-file-pp had no cards to associate with]");
+    }
+
+    var i;
+    function log(msg) { console.log(`Card ${cards[i]}: ${msg}`); }
+
+    for (i = 0; i < cards.length; i++) {
       const id = cards[i];
       const fileName = fileNameTemplate.replace("@", String(id));
 
       const ppBuf = iofs.readFile(fileName);
       if (!ppBuf) {
-        this.error(`Couldn't read '${fileName}' file '${id}`);
+        this.error(`Card ${id}: Couldn't read '${fileName}' file`);
       }
       else {
-        const ppObj = vbios.$readObject({ buffer: ppBuf, type: vbios.PowerPlayTable, log: this.warning.bind(this) });
+        const ppObj = vbios.$readObject({ buffer: ppBuf, type: vbios.PowerPlayTable, log: log });
         data[i].pp = ppObj;
         data[i].buf = ppBuf;
-        this.verbose(`Card '${id}' PP data loaded from '${fileName}'`);
+        this.verbose(`Card ${id}: PP data loaded from '${fileName}'`);
       }
     }
   }
@@ -326,7 +381,13 @@ class Commander {
     const cards = this.cards;
     const fileNameTemplate = this.checkFileName(args[0]);
 
-    for (var i = 0; i < cards.length; i++) {
+    if (!cards.length)
+      this.verbose("'--write-file-pp' does nothing if no cards were selected");
+
+    var i;
+    function log(msg) { console.log(`Card ${cards[i]}: ${msg}`); }
+
+    for (i = 0; i < cards.length; i++) {
       const id = cards[i];
       const fileName = fileNameTemplate.replace("@", String(id));
 
@@ -334,16 +395,20 @@ class Commander {
       const ppBuf = data[i].buf;
 
       if (!ppBuf || !ppObj) {
-        this.warning(`PP table of card '${id}' not loaded, cannot write it`);
+        this.warning(`Card ${id}: PP table not loaded so it cannot be written`);
         continue;
       }
 
-//      vbios.$updateObject({ buffer: ppBuf, object: ppObj, log: this.warning.bind(this) }); // WHY ?
+      if (data[i].dirty) {
+        vbios.$updateObject({ buffer: ppBuf, object: ppObj, log: log });
+        data[i].dirty = false;
+      }
+
       if (iofs.writeFileBinary(fileName, ppBuf)) {
-        this.verbose(`Card '${id}' PP data written to '${fileName}'`);
+        this.verbose(`Card ${id}: PP data written to '${fileName}'`);
       }
       else {
-        this.warning(`Couldn't write PP table of card '${id}' to file '${fileName}', do you have write access?`);
+        this.warning(`Card ${id}: Couldn't write PP table to file '${fileName}', do you have write access?`);
       }
     }
   }
@@ -373,9 +438,10 @@ class Commander {
       const pp = data[i].pp;
 
       if (!pp)
-        this.error(`'--set' command requires PP table(s) to be loaded (card '${id}')`);
+        this.error(`Card ${id}: '--set' command requires PP table(s) to be loaded`);
 
       binlib.utils.setKey(pp, key, value);
+      data[i].dirty = true;
     }
   }
 
@@ -393,7 +459,7 @@ class Commander {
     for (var i = 0; i < cards.length; i++) {
       const id = cards[i];
       const pp = data[i].pp;
-      this.message(`Card '${id}': ` + JSON.stringify(pp, null, 2));
+      this.message(`Card ${id}: ` + JSON.stringify(pp, null, 2));
     }
   }
 
@@ -417,7 +483,7 @@ class Commander {
 
       const buf = Utils.readBIOS(id);
       if (!buf) {
-        this.warning(`Couldn't extract BIOS of card '${id}, are you root?`);
+        this.warning(`Card ${id}: Couldn't extract VBIOS, are you root?`);
       }
       else {
         if (!iofs.writeFileBinary(fileName, buf))
@@ -444,16 +510,16 @@ class Commander {
 
       const buf = Utils.readBIOS(id);
       if (!buf) {
-        this.warning(`Couldn't extract BIOS of card '${id}', are you root?`);
+        this.warning(`Card ${id}: Couldn't extract VBIOS, are you root?`);
       }
       else {
         const pp = vbios.extractPowerPlayFromVBIOS(buf, 0);
         if (!pp) {
-          this.warning(`Couldn't extract PowerPlay from BIOS of card '${id}', please report this!`);
+          this.warning(`Card ${id}: Couldn't extract PowerPlay from VBIOS, please report this!`);
         }
         else {
           if (!iofs.writeFileBinary(fileName, pp))
-            this.warning(`Couldn't write to '${fileName}'`);
+            this.warning(`Card ${id}: Couldn't write to '${fileName}'`);
         }
       }
     }
@@ -467,31 +533,38 @@ class Commander {
 // ============================================================================
 
 function printUsage() {
-  console.log("Usage:");
-  console.log("  amdtweak [commands...]");
-  console.log("");
-  console.log("Commands:");
-  console.log("  --card X               - Select card to be used for all operations:");
-  console.log("         @               - Select all available cards");
-  console.log("         X-Y             - Select all available cards between X and Y, inclusive");
-  console.log("         X,Y,...         - Select X, Y, possibly more cards");
-  console.log("");
-  console.log("  --read-bios-pp         - Read a PowerPlay table from each selected card's BIOS (root)");
-  console.log("  --read-card-pp         - Read a PowerPlay table from each selected card");
-  console.log("  --write-card-pp        - Write a PowerPlay table to each selected card");
-  console.log("");
-  console.log("  --read-file-pp FILE    - Read a PowerPlay table from file");
-  console.log("  --write-file-pp FILE   - Write a PowerPlay table to file");
-  console.log("");
-  console.log("  --extract-bios FILE    - Extract BIOS of each selected card and store to FILE (root)");
-  console.log("  --extract-bios-pp FILE - Extract PP from BIOS of each selected card and store to FILE (root)");
-  console.log("");
-  console.log("  --set PROPERTY=VALUE   - Set a PROPERTY of each loaded PowerPlay table to VALUE");
-  console.log("  --print                - Print each PowerPlay table as JSON");
-  console.log("");
-  console.log("Notes:");
-  console.log("  - Commands are executed sequentially, one by one");
-  console.log("  - Use @ as a placeholder that will be replaced by each card id");
+  const usage = `AmdTweak - Read/Write AMDGPU VBIOS & PowerPlay
+
+  Usage:
+    amdtweak [commands...]
+
+  Commands:
+    --card X               - Select card to be used for all operations:
+          @               - Select all available cards
+          X-Y             - Select all available cards between X and Y, inclusive
+          X,Y,...         - Select X, Y, possibly more cards
+
+    --read-bios-pp         - Read a PowerPlay table from each selected card's BIOS (root)
+    --read-card-pp         - Read a PowerPlay table from each selected card
+    --write-card-pp        - Write a PowerPlay table to each selected card
+
+    --read-file-pp FILE    - Read a PowerPlay table from file
+    --write-file-pp FILE   - Write a PowerPlay table to file
+
+    --extract-bios FILE    - Extract BIOS of each selected card and store to FILE (root)
+    --extract-bios-pp FILE - Extract PP from BIOS of each selected card and store to FILE (root)
+
+    --set PROPERTY=VALUE   - Set a PROPERTY of each loaded PowerPlay table to VALUE
+    --print                - Print each PowerPlay table as JSON
+
+    --quiet                - Turn verbose messages off
+    --verbose              - Turn verbose messages on [default]
+
+  Notes:
+    - Commands are executed sequentially, one by one
+    - Use @ as a placeholder that will be replaced by each card id
+  `;
+  console.log(usage);
 }
 
 // ============================================================================

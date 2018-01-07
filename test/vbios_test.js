@@ -29,4 +29,4 @@ files.forEach(function(fileName) {
 });
 
 if (!ok)
-  console.log("\nFAILED! THE LIBRARY IS UNSTABLE");
+  console.log("\nFAILED! THE LIBRARY IS UNSTABLE!");
