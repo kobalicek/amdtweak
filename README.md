@@ -1,6 +1,8 @@
 AMD Tweak
 ---------
 
+This project is no longer developed or maintained. Please fork it if you want to continue the development.
+
 This is a library that can be used to manipulate data used by AMDGPU's ATOM BIOS and PowerPlay (PP). This package is designed to provide a foundation to load, modify, and save binary data used by AMDGPU and provides a few scripts that show how the library can be used. This project is mostly for people who want to experiment and write their own scripts.
 
 The project started by supporting Polaris GPUs, but since the structure definitions have support for versioning any GPU can be supported if the required tables are provided.
